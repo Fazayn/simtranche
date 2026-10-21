@@ -57,17 +57,22 @@ model Membership {
 }
 
 model Booking {
-  id          String        @id @default(cuid())
-  tenantId    String
-  title       String
-  clientName  String
-  clientEmail String?
-  startsAt    DateTime
-  endsAt      DateTime
-  status      BookingStatus @default(PENDING)
-  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id              String        @id @default(cuid())
+  tenantId        String
+  title           String
+  clientName      String
+  clientEmail     String?
+  startsAt        DateTime
+  endsAt          DateTime
+  status          BookingStatus @default(PENDING)
 
+  idempotencyKey  String?
+  idempotencyHash String?
+
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId, startsAt])
 }

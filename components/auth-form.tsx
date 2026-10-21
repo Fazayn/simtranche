@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { z } from "zod";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 type Mode = "onboarding" | "login" | "register" | "forgot-password";
 type RegistrationType = "register" | "onboarding";
@@ -70,6 +72,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
   const activeMode: Mode =
     mode === "register" ? registrationType : mode;
 
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [values, setValues] = useState<Record<string, string>>({
     organizationName: "",
@@ -142,37 +145,62 @@ async function submit(event: React.FormEvent<HTMLFormElement>) {
   setIsSubmitting(true);
 
   try {
-    if (activeMode !== "register") {
+    // LOGIN: Authenticate using Auth.js credentials provider.
+    if (activeMode === "login") {
+      const { signIn } = await import("next-auth/react");
+
+      const loginResult = await signIn("credentials", {
+        email: values.email,
+        password: values.password,
+        redirect: false,
+      });
+
+      if (loginResult?.error) {
+        setNotice("Invalid email or password. Please try again.");
+        return;
+      }
+
+      setNotice("Login successful! Redirecting...");
+
+      const { useRouter } = await import("next/navigation");
+      // Navigation should use the router initialized in your component.
+      window.location.href = "/dashboard";
+      return;
+    }
+
+    // REGISTER: Keep your existing backend registration logic.
+    if (activeMode === "register") {
+      const response = await fetch("/api/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: values.name,
+          email: values.email,
+          password: values.password,
+        }),
+      });
+
+      const data: { message?: string; error?: string } =
+        await response.json();
+
+      if (!response.ok) {
+        setNotice(data.error ?? "Registration failed. Please try again.");
+        return;
+      }
+
       setNotice(
-        "This form is not connected to the backend yet."
+        "Account created successfully! You can now sign in."
       );
       return;
     }
 
-    const response = await fetch("/api/register", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: values.name,
-        email: values.email,
-        password: values.password,
-      }),
-    });
+    // Other modes are not connected yet.
+    setNotice("This form is not connected to the backend yet.");
+  } catch (error) {
+    console.error("Authentication error:", error);
 
-    const data: { message?: string; error?: string } =
-      await response.json();
-
-    if (!response.ok) {
-      setNotice(data.error ?? "Registration failed. Please try again.");
-      return;
-    }
-
-    setNotice(
-      "Account created successfully! You can now sign in."
-    );
-  } catch {
     setNotice(
       "Unable to connect to the server. Please try again."
     );
