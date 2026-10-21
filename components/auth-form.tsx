@@ -7,6 +7,7 @@ import { z } from "zod";
 type Mode = "onboarding" | "login" | "register" | "forgot-password";
 type RegistrationType = "register" | "onboarding";
 
+
 const schemas = {
   onboarding: z.object({
     organizationName: z.string().trim().min(2, "Organization name must be at least 2 characters."),
@@ -69,6 +70,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
   const activeMode: Mode =
     mode === "register" ? registrationType : mode;
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [values, setValues] = useState<Record<string, string>>({
     organizationName: "",
     slug: "",
@@ -112,31 +114,73 @@ export default function AuthForm({ mode }: { mode: Mode }) {
     setNotice("");
   }
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  
+async function submit(event: React.FormEvent<HTMLFormElement>) {
+  event.preventDefault();
 
-    const result = schemas[activeMode].safeParse(values);
+  if (isSubmitting) return;
 
-    if (!result.success) {
-      const nextErrors: Record<string, string> = {};
+  const result = schemas[activeMode].safeParse(values);
 
-      result.error.issues.forEach((issue) => {
-        const field = String(issue.path[0] ?? "form");
-        if (!nextErrors[field]) {
-          nextErrors[field] = issue.message;
-        }
-      });
+  if (!result.success) {
+    const nextErrors: Record<string, string> = {};
 
-      setErrors(nextErrors);
-      setNotice("");
+    result.error.issues.forEach((issue) => {
+      const field = String(issue.path[0] ?? "form");
+      if (!nextErrors[field]) {
+        nextErrors[field] = issue.message;
+      }
+    });
+
+    setErrors(nextErrors);
+    setNotice("");
+    return;
+  }
+
+  setErrors({});
+  setNotice("");
+  setIsSubmitting(true);
+
+  try {
+    if (activeMode !== "register") {
+      setNotice(
+        "This form is not connected to the backend yet."
+      );
       return;
     }
 
-    setErrors({});
+    const response = await fetch("/api/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: values.name,
+        email: values.email,
+        password: values.password,
+      }),
+    });
+
+    const data: { message?: string; error?: string } =
+      await response.json();
+
+    if (!response.ok) {
+      setNotice(data.error ?? "Registration failed. Please try again.");
+      return;
+    }
+
     setNotice(
-      "Validation passed. The authentication backend is not connected yet."
+      "Account created successfully! You can now sign in."
     );
+  } catch {
+    setNotice(
+      "Unable to connect to the server. Please try again."
+    );
+  } finally {
+    setIsSubmitting(false);
   }
+}
+
 
   const inputClass = (field: string) =>
     `mt-1.5 block w-full rounded-xl border bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 ${
@@ -438,13 +482,16 @@ export default function AuthForm({ mode }: { mode: Mode }) {
               </div>
             )}
 
-            <button
+             
+             <button
               type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-700 px-4 py-3.5 text-sm font-semibold text-white shadow-sm shadow-indigo-700/20 transition hover:bg-indigo-800 focus:outline-none focus:ring-4 focus:ring-indigo-200"
-            >
-              {copy.button}
-              <span aria-hidden="true">→</span>
-            </button>
+               disabled={isSubmitting}
+               className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-700 px-4 py-3.5 text-sm font-semibold text-white shadow-sm shadow-indigo-700/20 transition hover:bg-indigo-800 focus:outline-none focus:ring-4 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-60"
+             >
+              {isSubmitting ? "Creating account..." : copy.button}
+             {!isSubmitting && <span aria-hidden="true">→</span>}
+              </button>
+
 
             <p className="pt-1 text-center text-xs leading-5 text-slate-400">
               By continuing, you agree to our{" "}
